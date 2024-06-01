@@ -1,0 +1,178 @@
+#0.0.1 change colors in vim
+vim /etc/vim/vimrc
+add:
+colorscheme desert
+
+
+#0.1 interface configuration
+#https://netplan.io/
+
+#netplan:
+
+/etc/netplan/00-installer-config.yaml
+
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    eth0:
+      addresses:
+         - 192.168.32.2/24
+      nameservers:
+        addresses:
+         - 192.168.32.3
+         - 192.168.32.4
+      routes:
+      - to: 0.0.0.0/0
+        via: 192.168.32.1
+        metric: 100
+
+#optiona: true - is for Note the ‘optional: true’ key declarations that allow 
+#booting to occur without waiting for those interfaces to activate fully.
+    eth1:
+      dhcp4: true
+      optional: true 
+      dhcp4-overrides:
+        route-metric: 200
+    eth2:
+      addresses:
+          - 10.0.0.1/24
+  version: 2
+
+# netplan.io man and examples
+
+1. Enable permanetn routing.
+Edit file: /etc/sysctl.conf
+uncoment: net.ipv4.ip_forward=1
+
+to apply: sysctl -p /etc/sysctl.conf
+
+"to show MAC address table" -> ip n (ip-neighbour)
+
+2. Install kea DHCP server
+https://kea.readthedocs.io/en/kea-2.4.1/arm/install.html
+
+ curl -1sLf   'https://dl.cloudsmith.io/public/isc/kea-2-4/setup.deb.sh'   | sudo -E bash
+apt install isc-kea-dhcp4-server -y
+The kea-dhcp4 service can be configured by editing /etc/kea/kea-dhcp4.conf
+
+systemctl enable isc-kea-dhcp4-server
+systemctl start isc-kea-dhcp4-server
+
+3. NAT from local network to internet.
+
+IP Masquerading
+       To  allow  IP  masquerading for computers from the 10.0.0.0/8 network on eth1 to share the
+       single IP address on eth0:
+
+       Edit /etc/ufw/sysctl.conf to have:
+               net.ipv4.ip_forward=1
+
+       Add to the end of /etc/ufw/before.rules, in the end after  COMMIT:
+# nat Table rules
+*nat
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -s 10.0.0.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 10.0.0.0/24 -o eth1 -j MASQUERADE
+COMMIT
+
+#disable ipv6
+/etc/default/ufw
+
+#open ssh port
+ufw app list
+ufw allow OpenSSH 
+
+
+# for routed traffic allow:a
+ufw route allow in on eth2 out eth0 from 10.0.0.0/24 (all traffic can go)
+ufw route allow in on eth2 out on eth1 to any port 80,443 from 10.0.0.0/24 proto tcp (only 80,443 ports/tcp can go)
+
+#usefull comands
+journalctl | grep -i ufw
+tail -f /var/log/ufw.log
+ufw status numbered
+ufw delete 7
+
+
+
+# show nat connection:
+apt install conntrack
+conntrack -L --src-nat
+
+4.Install grafana https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/
+
+apt-get install -y apt-transport-https software-properties-common wget
+mkdir -p /etc/apt/keyrings/
+wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee -a /etc/apt/sources.list.d/grafana.list
+apt-get update
+apt-get install grafana
+
+5.Install prometheus https://www.cherryservers.com/blog/install-prometheus-ubuntu
+https://prometheus.io/download/
+
+apt update
+sudo groupadd --system prometheus
+sudo useradd -s /sbin/nologin --system -g prometheus prometheus
+sudo mkdir /etc/prometheus
+sudo mkdir /var/lib/prometheus
+wget https://github.com/prometheus/prometheus/releases/download/v2.50.1/prometheus-2.50.1.linux-amd64.tar.gz
+tar vxf prometheus*.tar.gz
+cd prometheus*/
+
+ mv prometheus /usr/local/bin
+ mv promtool /usr/local/bin
+ chown prometheus:prometheus /usr/local/bin/prometheus
+ chown prometheus:prometheus /usr/local/bin/promtool
+
+ mv consoles /etc/prometheus
+ mv console_libraries /etc/prometheus
+ mv prometheus.yml /etc/prometheus
+
+ chown prometheus:prometheus /etc/prometheus
+ chown -R prometheus:prometheus /etc/prometheus/consoles
+ chown -R prometheus:prometheus /etc/prometheus/console_libraries
+ chown -R prometheus:prometheus /var/lib/prometheus
+
+vim /etc/prometheus/prometheus.yml
+
+vim /etc/systemd/system/prometheus.service
+
+systemctl daemon-reload
+ systemctl enable prometheus
+ systemctl start prometheus
+
+ufw allow 9090/tcp
+
+6. Install node_exporter https://gist.github.com/nwesterhausen/d06a772cbf2a741332e37b5b19edb192
+
+useradd --no-create-home --shell /bin/false node_exporter
+wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz
+
+tar xvf node_exporter*.tar.gz
+
+mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin
+
+rm -r node_exporter*
+
+vim /etc/systemd/system/node_exporter.service
+chown node_exporter:node_exporter /usr/local/bin/node_exporter
+systemctl daemon-reload
+systemctl enable node_exporter
+systemctl start node_exporter
+#check metrics
+curl http://localhost:9100/metrics
+
+
+7. Install iperf3
+
+apt update
+apt -y install iperf3
+
+7.1 Start the server
+iperf3 -s 
+iperf3 -s -p <port number>
+iperf3 -s -B <ip-address>
+
+7.2 Start client
+iperf3 -c <ip-address> -p <port number>
