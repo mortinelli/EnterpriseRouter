@@ -3,6 +3,16 @@ vim /etc/vim/vimrc
 add:
 colorscheme desert
 
+#0.0.2 autocomplite based on history
+cat >> ~/.inputrc <<'EOF'
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+EOF
+
+#Open a new shell session, or just reload inputrc:
+
+bind -f  ~/.inputrc
+
 
 #0.1 interface configuration
 #https://netplan.io/
@@ -49,9 +59,14 @@ to apply: sysctl -p /etc/sysctl.conf
 "to show MAC address table" -> ip n (ip-neighbour)
 
 2. Install kea DHCP server
+Read before install https://kb.isc.org/docs/isc-kea-packages
+
 https://kea.readthedocs.io/en/kea-2.4.1/arm/install.html
 
- curl -1sLf   'https://dl.cloudsmith.io/public/isc/kea-2-4/setup.deb.sh'   | sudo -E bash
+curl -1sLf \
+  'https://dl.cloudsmith.io/public/isc/kea-2-6/setup.deb.sh' \
+  | sudo -E bash
+
 apt install isc-kea-dhcp4-server -y
 The kea-dhcp4 service can be configured by editing /etc/kea/kea-dhcp4.conf
 
@@ -59,6 +74,8 @@ systemctl enable isc-kea-dhcp4-server
 systemctl start isc-kea-dhcp4-server
 
 3. NAT from local network to internet.
+
+# reed for more andersteding https://manpages.ubuntu.com/manpages/jammy/en/man8/ufw-framework.8.html
 
 IP Masquerading
        To  allow  IP  masquerading for computers from the 10.0.0.0/8 network on eth1 to share the
@@ -71,12 +88,19 @@ IP Masquerading
 # nat Table rules
 *nat
 :POSTROUTING ACCEPT [0:0]
+:PREROUTING ACCEPT [0:0]
 -A POSTROUTING -s 10.0.0.0/24 -o eth0 -j MASQUERADE
 -A POSTROUTING -s 10.0.0.0/24 -o eth1 -j MASQUERADE
+-A PREROUTING -p tcp -i eth0 --dport 80 -j DNAT --to-destination 10.0.11.11:80
 COMMIT
+
+ 
+
+3.1 UFW configuration
 
 #disable ipv6
 /etc/default/ufw
+#set IPV6=no
 
 #open ssh port
 ufw app list
@@ -86,6 +110,13 @@ ufw allow OpenSSH
 # for routed traffic allow:a
 ufw route allow in on eth2 out eth0 from 10.0.0.0/24 (all traffic can go)
 ufw route allow in on eth2 out on eth1 to any port 80,443 from 10.0.0.0/24 proto tcp (only 80,443 ports/tcp can go)
+ufw route allow in on eth1 to 10.0.11.11 port 80 proto tcp (revers nat)
+
+# 
+
+ufw status
+ufw enable
+
 
 #usefull comands
 journalctl | grep -i ufw
@@ -99,6 +130,8 @@ ufw delete 7
 apt install conntrack
 conntrack -L --src-nat
 
+
+ # Grafana is an artist to draw a graphics and other cool pichers.
 4.Install grafana https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/
 
 apt-get install -y apt-transport-https software-properties-common wget
@@ -108,6 +141,23 @@ echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stab
 apt-get update
 apt-get install grafana
 
+systemctl enable grafana-server
+ systemctl start grafana-server
+
+ ufw allow 3000/tcp
+
+# http://ip_addrr/3000 (user/pwd-admin/admin)
+
+#Delete grafana-server
+
+systemctl stop grafana-server
+service grafana-server stop
+apt-get remove grafana
+sudo rm -i /etc/apt/sources.list.d/grafana.list
+
+
+
+# Collector of data from different sources.
 5.Install prometheus https://www.cherryservers.com/blog/install-prometheus-ubuntu
 https://prometheus.io/download/
 
@@ -129,6 +179,9 @@ cd prometheus*/
  mv console_libraries /etc/prometheus
  mv prometheus.yml /etc/prometheus
 
+ cd ..
+ rm -r prometheus*
+
  chown prometheus:prometheus /etc/prometheus
  chown -R prometheus:prometheus /etc/prometheus/consoles
  chown -R prometheus:prometheus /etc/prometheus/console_libraries
@@ -136,14 +189,27 @@ cd prometheus*/
 
 vim /etc/prometheus/prometheus.yml
 
-vim /etc/systemd/system/prometheus.service
+#copy from prometheus.service file to  /etc/systemd/system/prometheus.service
 
 systemctl daemon-reload
  systemctl enable prometheus
  systemctl start prometheus
 
-ufw allow 9090/tcp
+#ufw allow 9090/tcp
 
+#delete prometheus
+systemctl stop prometheus
+systemctl disable prometheus
+rm -rf /etc/prometheus
+rm -rf /var/lib/prometheus
+rm -rf /usr/local/bin/prometheus
+rm -rf /usr/local/bin/promtool
+rm -rf /etc/systemd/system/prometheus.service 
+systemctl daemon-reload
+
+
+
+# Collector of different metrics from linux machine. 
 6. Install node_exporter https://gist.github.com/nwesterhausen/d06a772cbf2a741332e37b5b19edb192
 
 useradd --no-create-home --shell /bin/false node_exporter
@@ -160,8 +226,21 @@ chown node_exporter:node_exporter /usr/local/bin/node_exporter
 systemctl daemon-reload
 systemctl enable node_exporter
 systemctl start node_exporter
+
+
+#delete node_exporter
+systemctl stop node_exporter
+systemctl disable node_exporter
+rm -rf /usr/local/bin/node_exporter
+rm -rf /etc/systemd/system/node_exporter.service
+systemctl daemon-reload
+
+
 #check metrics
 curl http://localhost:9100/metrics
+
+
+#Grafana dashboard ID 10180
 
 
 7. Install iperf3
@@ -176,3 +255,43 @@ iperf3 -s -B <ip-address>
 
 7.2 Start client
 iperf3 -c <ip-address> -p <port number>
+
+
+8. Troubeleshooting
+
+8.1 Interfaces and connectivity
+
+ip a #show interface current status ip address and mac address.
+
+netplan status #show interface current status ip address and mac address.
+
+netplan get # show current yaml config 
+
+ 
+8.2 KEA DHCP4 SERVER:
+
+tail -f /var/log/kea/kea-debug.log #show dhcp server logs.
+systemctl status isc-kea-dhcp4-server #show status of service
+journalctl | grep kea # service status logs and etc.
+vim /var/lib/kea/kea-leases4 # leases DB depend of current config.
+vim /etc/kea/kea-dhcp4.conf # config file
+tcpdump -i eth0 -n port 67 and port 68 # show dhcp traffic on interface eth0
+
+8.3 UFW 
+! Defaul action suposed block any traffic. Do not change default behaver. 
+
+ufw status # show status and rules
+ufw app list # show application that can be added to rules 
+ufw status numbered # show rules and their number
+ufw delete 5 # delete rule num 5
+tail -f /var/log/ufw.log # show ufw logs can see what is blocked
+sudo ufw disable # turn off
+sudo ufw enable # turn on
+
+
+
+
+
+
+
+
