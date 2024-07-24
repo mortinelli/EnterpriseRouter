@@ -289,6 +289,75 @@ sudo ufw disable # turn off
 sudo ufw enable # turn on
 
 
+9.WireGuard VPN 
+# https://www.wireguard.com/
+# https://netplan.readthedocs.io/en/stable/examples/#how-to-connect-two-systems-with-a-wireguard-vpn
+
+apt install wireguard
+
+# server key gen
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+# Servernetwork:
+
+    network:
+    tunnels:
+      cowg0:
+          mode: wireguard
+          port: 51820
+          key: oOAI3iqsIHLI+tODeLM606tKUliopOrs1lGvC9kZLlk=
+          addresses:
+            - 192.168.16.1/30
+          peers:
+            - keys:
+                public: wIfcLkBdsRn2vsHjYwYHpLEca9euFRc1+Xe13/1uCFw=
+              allowed-ips: [192.168.16.0/24]
+            - keys:
+                public: wIfcLkBdsRn2vsHjYwYHpLEca9euFRc1+Xe13/1uCFw=
+              allowed-ips: [192.168.16.0/24]  
+
+
+# server key gen
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+# Clientnetwork01
+
+network:
+    tunnels:
+      bowg0:
+          mode: wireguard
+          port: 51820
+          key: WFraAd71k70mD01fg8y5xn1c4QwRnHje4u/LtH1OfFs=
+          addresses:
+            - 192.168.16.2/30
+          peers:
+            - allowed-ips: [192.168.16.0/30]
+              endpoint: 148.145.33.21:51820
+              keys:
+                public: dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=
+# Clientnetwork02
+
+network:
+    tunnels:
+      bowg0:
+          mode: wireguard
+          port: 51820
+          key: WFraAd71k70mD01fg8y5xn1c4QwRnHje4u/LtH1OfFs=
+          addresses:
+            - 192.168.16.3/30
+          peers:
+            - allowed-ips: [192.168.16.0/30]
+              endpoint: 148.145.33.21:51820
+              keys:
+                public: dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=                
+
+
+
+
+
+
 
 
 

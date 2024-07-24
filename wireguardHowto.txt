@@ -1,0 +1,133 @@
+apt install wireguard
+
+How to connect two systems with a WireGuard VPN
+Generate the private and public keys in the first peer. Run the following commands with administrator privileges:
+
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+cat private.key
+UMjI9WbobURkCDh2RT8SRM5osFI7siiR/sPOuuTIDns=
+
+cat public.key
+EdNnZ1/2OJZ9HcScSVcwDVUsctCkKQ/xzjEyd3lZFFs=
+Do the same in the second peer:
+
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+cat private.key
+UAmjvLDVuV384OWFJkmI4bG8AIAZAfV7LarshnV3+lc=
+
+cat public.key
+AIm+QeCoC23zInKASmhu6z/3iaT0R2IKraB7WwYB5ms=
+Use the following configuration in the first peer (replace the keys and IP addresses as needed):
+
+network:
+  tunnels:
+    wg0:
+      mode: wireguard
+      port: 51820
+      key: UMjI9WbobURkCDh2RT8SRM5osFI7siiR/sPOuuTIDns=
+      addresses:
+        - 172.16.0.1/24
+      peers:
+        - allowed-ips: [172.16.0.0/24]
+          endpoint: 10.86.126.56:51820
+          keys:
+            public: AIm+QeCoC23zInKASmhu6z/3iaT0R2IKraB7WwYB5ms=
+In the YAML file above, key is the first peer’s private key and public is the second peer’s public key. endpoint is the second peer IP address.
+
+Use the following configuration in the second peer:
+
+network:
+  tunnels:
+    wg0:
+      mode: wireguard
+      port: 51820
+      key: UAmjvLDVuV384OWFJkmI4bG8AIAZAfV7LarshnV3+lc=
+      addresses:
+        - 172.16.0.2/24
+      peers:
+        - allowed-ips: [172.16.0.0/24]
+          endpoint: 10.86.126.40:51820
+          keys:
+            public: EdNnZ1/2OJZ9HcScSVcwDVUsctCkKQ/xzjEyd3lZFFs=
+
+In the YAML file above, key is the second peer’s private key and public 
+is the first peer’s public key. endpoint is the first peer's IP address.
+
+
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+/etc/wireguard/wg0.conf
+
+# local settings for Host CO
+[Interface]
+PrivateKey = oOAI3iqsIHLI+tODeLM606tKUliopOrs1lGvC9kZLlk=
+Address = 192.168.16.1/32
+ListenPort = 51820
+
+# remote settings for Endpoint BO1
+[Peer]
+PublicKey = wIfcLkBdsRn2vsHjYwYHpLEca9euFRc1+Xe13/1uCFw=
+AllowedIPs = 192.168.16.2/32
+
+# remote settings for Endpoint BO2
+[Peer]
+PublicKey = TgMZanCafa0+dD8gRMhHIDL+lRO9fBJg6u5Uazjpiiw=
+AllowedIPs = 192.168.16.3/32
+
+systemctl enable wg-quick@wg0.service
+systemctl start wg-quick@wg0.service
+
+ufw allow in on eth1 to any port 51821 proto udp
+
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+/etc/wireguard/wg0.conf
+
+# local settings for Endpoint BO1
+[Interface]
+PrivateKey = WFraAd71k70mD01fg8y5xn1c4QwRnHje4u/LtH1OfFs=
+Address = 192.168.16.2/32
+
+# remote settings for Host CO
+[Peer]
+PublicKey = dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=
+Endpoint = 148.145.33.21:51820
+AllowedIPs = 192.168.16.0/24
+
+systemctl enable wg-quick@wg0.service
+systemctl start wg-quick@wg0.service
+
+wg genkey > private.key
+wg pubkey < private.key > public.key
+
+/etc/wireguard/wg0.conf
+
+# local settings for Endpoint BO2
+[Interface]
+PrivateKey = MJ9bdb6DlRyxwojPMbTWt467VhpOxwndQBQY1kNYcEA=
+Address = 192.168.16.3/32
+
+# remote settings for Host CO
+[Peer]
+PublicKey = dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=
+Endpoint = 148.145.33.21:51820
+AllowedIPs = 192.168.16.0/24
+
+systemctl enable wg-quick@wg0.service
+systemctl start wg-quick@wg0.servic
+
+
+# delete
+
+systemctl stop wg-quick@wg0.service
+systemctl disable wg-quick@wg0.service
+rm -f /etc/wireguard/wg0.conf
+rm -f private.key public.key
+
+# ip link delete wg0
