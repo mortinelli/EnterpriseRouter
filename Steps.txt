@@ -293,66 +293,67 @@ sudo ufw enable # turn on
 # https://www.wireguard.com/
 # https://netplan.readthedocs.io/en/stable/examples/#how-to-connect-two-systems-with-a-wireguard-vpn
 
-apt install wireguard
+See the wireguardHowto.txt file.             
 
-# server key gen
-wg genkey > private.key
-wg pubkey < private.key > public.key
+10. Dynamic routing FRR.
 
-# Servernetwork:
+https://frrouting.org/
 
-    network:
-    tunnels:
-      cowg0:
-          mode: wireguard
-          port: 51820
-          key: oOAI3iqsIHLI+tODeLM606tKUliopOrs1lGvC9kZLlk=
-          addresses:
-            - 192.168.16.1/30
-          peers:
-            - keys:
-                public: wIfcLkBdsRn2vsHjYwYHpLEca9euFRc1+Xe13/1uCFw=
-              allowed-ips: [192.168.16.0/24]
-            - keys:
-                public: wIfcLkBdsRn2vsHjYwYHpLEca9euFRc1+Xe13/1uCFw=
-              allowed-ips: [192.168.16.0/24]  
+# add GPG key
+curl -s https://deb.frrouting.org/frr/keys.gpg | sudo tee /usr/share/keyrings/frrouting.gpg > /dev/null
+
+# possible values for FRRVER: frr-6 frr-7 frr-8 frr-9.0 frr-9.1 frr-stable
+# frr-stable will be the latest official stable release
+FRRVER="frr-stable"
+echo deb '[signed-by=/usr/share/keyrings/frrouting.gpg]' https://deb.frrouting.org/frr \
+     $(lsb_release -s -c) $FRRVER | sudo tee -a /etc/apt/sources.list.d/frr.list
+
+# update and install FRR
+sudo apt update && sudo apt install frr frr-pythontools
 
 
-# server key gen
-wg genkey > private.key
-wg pubkey < private.key > public.key
+https://github.com/FRRouting/frr/issues/5939
 
-# Clientnetwork01
+https://blog.bella.network/internal-bgp-with-wireguard/
 
-network:
-    tunnels:
-      bowg0:
-          mode: wireguard
-          port: 51820
-          key: WFraAd71k70mD01fg8y5xn1c4QwRnHje4u/LtH1OfFs=
-          addresses:
-            - 192.168.16.2/30
-          peers:
-            - allowed-ips: [192.168.16.0/30]
-              endpoint: 148.145.33.21:51820
-              keys:
-                public: dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=
-# Clientnetwork02
 
-network:
-    tunnels:
-      bowg0:
-          mode: wireguard
-          port: 51820
-          key: WFraAd71k70mD01fg8y5xn1c4QwRnHje4u/LtH1OfFs=
-          addresses:
-            - 192.168.16.3/30
-          peers:
-            - allowed-ips: [192.168.16.0/30]
-              endpoint: 148.145.33.21:51820
-              keys:
-                public: dViIBetdPW1DBcZQCeIt8boG+aWFbBEPs5F1j4zniBc=                
+#Example for iBGP
 
+vim /etc/frr/daemons
+
+bgpd=yes
+
+vim /etc/frr/frr.conf
+
+#Hub config
+
+router bgp 65001
+ bgp log-neighbor-changes
+ bgp router-id 192.168.16.1
+ neighbor 192.168.16.2 remote-as 65001
+ neighbor 192.168.16.3 remote-as 65001
+ neighbor 192.168.16.2 route-reflector-client
+ neighbor 192.168.16.3 route-reflector-client
+
+ network 10.0.11.0/24
+
+ #Spoke1
+
+router bgp 65001
+ bgp log-neighbor-changes
+ bgp router-id 192.168.16.2
+ neighbor 192.168.16.1 remote-as 65001
+
+ network 192.168.10.0/24
+
+#Spoke2
+
+router bgp 65001
+ bgp log-neighbor-changes
+ bgp router-id 192.168.16.3
+ neighbor 192.168.16.1 remote-as 65001
+
+ network 192.168.32.0/24
 
 
 
